@@ -14,4 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.GenericDatabase = void 0;
+var generic_database_1 = require("./generic-database");
+Object.defineProperty(exports, "GenericDatabase", { enumerable: true, get: function () { return generic_database_1.GenericDatabase; } });
 __exportStar(require("./generic-helper"), exports);

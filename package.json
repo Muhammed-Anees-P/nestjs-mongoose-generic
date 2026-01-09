@@ -1,6 +1,6 @@
 {
   "name": "nestjs-mongoose-generic",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Generic repository utilities for NestJS + Mongoose",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

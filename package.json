@@ -1,0 +1,31 @@
+{
+  "name": "nestjs-mongoose-generic",
+  "version": "1.0.0",
+  "description": "Generic repository utilities for NestJS + Mongoose",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "nestjs",
+    "mongoose",
+    "repository",
+    "generic",
+    "crud",
+    "typescript"
+  ],
+  "author": "Muhammed Anees P",
+  "license": "MIT",
+  "peerDependencies": {
+    "@nestjs/common": "^10.0.0",
+    "mongoose": "^7.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

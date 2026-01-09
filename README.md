@@ -28,13 +28,13 @@ Install the package and its peer dependencies using your preferred package manag
 ### Using npm
 
 ```bash
-npm install nestjs-mongoose-generic mongoose @nestjs/mongoose
+npm install nestjs-mongoose-generic
 ```
 
 ### Using pnpm
 
 ```bash
-pnpm add nestjs-mongoose-generic mongoose @nestjs/mongoose
+pnpm add nestjs-mongoose-generic
 ```
 
 ## Usage

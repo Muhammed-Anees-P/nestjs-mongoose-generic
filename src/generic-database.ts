@@ -1,9 +1,53 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { HydratedDocument, Model, PopulateOptions } from 'mongoose';
-import { normalizePopulate } from './generic-helper';
+import { BadRequestException, NotFoundException } from "@nestjs/common";
+import mongoose, {
+  HydratedDocument,
+  Model,
+  PopulateOptions,
+  ClientSession,
+} from "mongoose";
+import { normalizePopulate } from "./generic-helper";
+
+type DbOptions = {
+  session?: ClientSession;
+};
 
 export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
   constructor(private readonly dbModel: T) {}
+
+  protected isValidMongoId = (id: string) => {
+    return mongoose.isValidObjectId(id);
+  };
+
+  /**
+   * Executes a series of database operations within a transaction.
+   *
+   * This function ensures that all operations within the `operation` callback are
+   * executed atomically. If any operation fails, the entire transaction is rolled back.
+   *
+   * @template R - The return type of the operation.
+   * @param {(session: ClientSession) => Promise<R>} operation - A function that takes a Mongoose session and returns a Promise resolving to the result of the transaction.
+   * @returns {Promise<R>} - A Promise that resolves with the result of the `operation` function if the transaction is successful.
+   * @throws {Error} - Throws any error that occurs during the transaction, and the transaction is aborted.
+   */
+  async runTransaction<R>(
+    operation: (session: ClientSession) => Promise<R>,
+  ): Promise<R> {
+    const session = await this.dbModel.db.startSession();
+
+    try {
+      session.startTransaction();
+
+      const result = await operation(session);
+
+      await session.commitTransaction();
+      return result;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
 
   /** * Finds a document by its username.
    *
@@ -35,13 +79,13 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
       return response;
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error('Error finding document by username:', error);
+        console.error("Error finding document by username:", error);
         throw new NotFoundException(
           `Error finding document by username: ${error.message}`,
         );
       }
 
-      console.error('Unknown error finding document by username:', error);
+      console.error("Unknown error finding document by username:", error);
       throw error;
     }
   }
@@ -52,25 +96,27 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
    * @returns {Promise<HydratedDocument<any>[]>} - A Promise that resolves to an array of all documents.
    * @throws {NotFoundException} - Thrown if an error occurs during the retrieval.
    */
-  async genericFindAll(): Promise<HydratedDocument<any>[]> {
+  async genericFindAll(filter?: any): Promise<HydratedDocument<any>[]> {
     try {
       const response: HydratedDocument<any>[] = await this.dbModel
-        .find({ isDeleted: false })
+        .find({ ...filter, isDeleted: false })
         .exec();
+
       if (!response) {
         throw new NotFoundException(
           `No ${this.dbModel.modelName} documents found`,
         );
       }
+
       return response;
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.log('Error finding all documents:', error);
+        console.log("Error finding all documents:", error);
         throw new NotFoundException(
           `Error finding all documents: ${error.message}`,
         );
       }
-      console.log('Unknown error finding all documents:', error);
+      console.log("Unknown error finding all documents:", error);
       throw error;
     }
   }
@@ -97,22 +143,21 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
 
       if (!response) {
         throw new NotFoundException(
-          `${this.dbModel.modelName} Document with id ${id} not found`,
+          `${this.dbModel.modelName} Document not found`,
         );
       }
 
       return response;
     } catch (error: unknown) {
-      console.error('Error finding document:', error);
-
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
       if (error instanceof Error) {
-        throw new Error(`Error finding document: ${error.message}`);
+        console.error("Error finding document:", error);
+        throw new BadRequestException(
+          `Error finding document: ${error.message}`,
+        );
       }
-      console.log('Unknown error finding document by id:', error);
-      throw error;
+
+      console.log("Unknown error finding document by id:", error);
+      throw BadRequestException;
     }
   }
 
@@ -124,24 +169,32 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
    * @returns {Promise<HydratedDocument<any>>} - A Promise that resolves to the created document.
    * @throws {BadRequestException} - Thrown if an error occurs during creation.
    */
-  async genericCreateOne(createDto: any): Promise<HydratedDocument<any>> {
+  async genericCreateOne(
+    createDto: any,
+    options?: DbOptions,
+  ): Promise<HydratedDocument<any>> {
     try {
       const createdDocument = new this.dbModel(createDto);
-      const response = await createdDocument.save();
+
+      const response = await createdDocument.save({
+        session: options?.session,
+      });
+
       if (!response) {
         throw new BadRequestException(
           `Failed to create ${this.dbModel.modelName} document`,
         );
       }
+
       return response;
     } catch (error: unknown) {
-      console.error('Error creating document:', error);
+      console.error("Error creating document:", error);
       if (error instanceof Error) {
         throw new BadRequestException(
           `Error creating document: ${error.message}`,
         );
       }
-      console.log('Unknown error creating document:', error);
+      console.log("Unknown error creating document:", error);
       throw error;
     }
   }
@@ -159,11 +212,13 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
   async genericUpdateOne(
     id: string,
     updateDto: any,
+    options?: DbOptions,
   ): Promise<HydratedDocument<any> | null> {
     try {
       const updatedDocument = await this.dbModel
         .findOneAndUpdate({ _id: id, isDeleted: false }, updateDto, {
           new: true,
+          session: options?.session,
         })
         .exec();
 
@@ -175,13 +230,13 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
 
       return updatedDocument;
     } catch (error: unknown) {
-      console.error('Error updating document:', error);
+      console.error("Error updating document:", error);
       if (error instanceof Error) {
         throw new BadRequestException(
           `Error updating document: ${error.message}`,
         );
       }
-      console.log('Unknown error updating document:', error);
+      console.log("Unknown error updating document:", error);
       throw error;
     }
   }
@@ -195,31 +250,37 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
    * @throws {NotFoundException} - Thrown if the document with the specified ID is not found.
    * @throws {BadRequestException} - Thrown if an error occurs during the deletion.
    */
-  async genericDeleteOne(id: string): Promise<HydratedDocument<any> | null> {
+  async genericDeleteOne(
+    id: string,
+    options?: DbOptions,
+  ): Promise<HydratedDocument<any> | null> {
     try {
       const deletedDocument = await this.dbModel
         .findOneAndUpdate(
           { _id: id, isDeleted: false },
           { isDeleted: true },
-          { new: true },
+          {
+            new: true,
+            session: options?.session,
+          },
         )
         .exec();
 
       if (!deletedDocument) {
         throw new NotFoundException(
-          `${this.dbModel.modelName} Document with id ${id} not found`,
+          `${this.dbModel.modelName} Document not found`,
         );
       }
 
       return deletedDocument;
     } catch (error: unknown) {
-      console.error('Error deleting document:', error);
+      console.error("Error deleting document:", error);
       if (error instanceof Error) {
         throw new BadRequestException(
           `Error deleting document: ${error.message}`,
         );
       }
-      console.log('Unknown error deleting document:', error);
+      console.log("Unknown error deleting document:", error);
       throw error;
     }
   }
@@ -232,20 +293,26 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
    * @returns {Promise<HydratedDocument<any> | null>} - A Promise that resolves to the found document, or null if not found.
    * @throws {NotFoundException} - Thrown if an error occurs during the search.
    */
-  async genericFindOne(filter: any): Promise<HydratedDocument<any> | null> {
+  async genericFindOne(
+    filter: any,
+    options?: DbOptions,
+  ): Promise<HydratedDocument<any> | null> {
     try {
       const response: HydratedDocument<any> | null = await this.dbModel
-        .findOne({ ...filter, isDeleted: false })
+        .findOne({ ...filter, isDeleted: false }, null, {
+          session: options?.session,
+        })
         .exec();
+
       return response;
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.log('Error finding document by filter:', error);
+        console.log("Error finding document by filter:", error);
         throw new NotFoundException(
           `Error finding document by filter: ${error.message}`,
         );
       }
-      console.log('Unknown error finding document by filter:', error);
+      console.log("Unknown error finding document by filter:", error);
       throw error;
     }
   }
@@ -274,7 +341,7 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
       return await query.exec();
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error('Error finding and populating document:', error);
+        console.error("Error finding and populating document:", error);
         throw new NotFoundException(
           `Error finding and populating document: ${error.message}`,
         );
@@ -306,7 +373,7 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
       return await query.exec();
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error('Error finding and populating documents:', error);
+        console.error("Error finding and populating documents:", error);
         throw new NotFoundException(
           `Error finding and populating documents: ${error.message}`,
         );
@@ -341,12 +408,12 @@ export class GenericDatabase<T extends Model<HydratedDocument<any>>> {
       return response;
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.log('Error finding document by filter:', error);
+        console.log("Error finding document by filter:", error);
         throw new NotFoundException(
           `Error finding document by filter: ${error.message}`,
         );
       }
-      console.log('Unknown error finding document by filter:', error);
+      console.log("Unknown error finding document by filter:", error);
       throw error;
     }
   }

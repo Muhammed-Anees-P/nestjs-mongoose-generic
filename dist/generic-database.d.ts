@@ -1,7 +1,23 @@
-import { HydratedDocument, Model, PopulateOptions } from 'mongoose';
+import { HydratedDocument, Model, PopulateOptions, ClientSession } from "mongoose";
+type DbOptions = {
+    session?: ClientSession;
+};
 export declare class GenericDatabase<T extends Model<HydratedDocument<any>>> {
     private readonly dbModel;
     constructor(dbModel: T);
+    protected isValidMongoId: (id: string) => boolean;
+    /**
+     * Executes a series of database operations within a transaction.
+     *
+     * This function ensures that all operations within the `operation` callback are
+     * executed atomically. If any operation fails, the entire transaction is rolled back.
+     *
+     * @template R - The return type of the operation.
+     * @param {(session: ClientSession) => Promise<R>} operation - A function that takes a Mongoose session and returns a Promise resolving to the result of the transaction.
+     * @returns {Promise<R>} - A Promise that resolves with the result of the `operation` function if the transaction is successful.
+     * @throws {Error} - Throws any error that occurs during the transaction, and the transaction is aborted.
+     */
+    runTransaction<R>(operation: (session: ClientSession) => Promise<R>): Promise<R>;
     /** * Finds a document by its username.
      *
      * This function queries the database for a document matching the provided username.
@@ -17,7 +33,7 @@ export declare class GenericDatabase<T extends Model<HydratedDocument<any>>> {
      * @returns {Promise<HydratedDocument<any>[]>} - A Promise that resolves to an array of all documents.
      * @throws {NotFoundException} - Thrown if an error occurs during the retrieval.
      */
-    genericFindAll(): Promise<HydratedDocument<any>[]>;
+    genericFindAll(filter?: any): Promise<HydratedDocument<any>[]>;
     /**
      * Finds a single document by its ID where `isDeleted` is false.
      *
@@ -34,7 +50,7 @@ export declare class GenericDatabase<T extends Model<HydratedDocument<any>>> {
      * @returns {Promise<HydratedDocument<any>>} - A Promise that resolves to the created document.
      * @throws {BadRequestException} - Thrown if an error occurs during creation.
      */
-    genericCreateOne(createDto: any): Promise<HydratedDocument<any>>;
+    genericCreateOne(createDto: any, options?: DbOptions): Promise<HydratedDocument<any>>;
     /** * Generic method to update a document by its ID.
      *
      * This function updates an existing document in the database using the provided update DTO.
@@ -45,7 +61,7 @@ export declare class GenericDatabase<T extends Model<HydratedDocument<any>>> {
      * @throws {NotFoundException} - Thrown if the document with the specified ID is not found.
      * @throws {BadRequestException} - Thrown if an error occurs during the update.
      */
-    genericUpdateOne(id: string, updateDto: any): Promise<HydratedDocument<any> | null>;
+    genericUpdateOne(id: string, updateDto: any, options?: DbOptions): Promise<HydratedDocument<any> | null>;
     /** * Generic method to "delete" a document by its ID.
      *
      * This function marks a document as deleted in the database by setting its `isDeleted` flag to true.
@@ -55,7 +71,7 @@ export declare class GenericDatabase<T extends Model<HydratedDocument<any>>> {
      * @throws {NotFoundException} - Thrown if the document with the specified ID is not found.
      * @throws {BadRequestException} - Thrown if an error occurs during the deletion.
      */
-    genericDeleteOne(id: string): Promise<HydratedDocument<any> | null>;
+    genericDeleteOne(id: string, options?: DbOptions): Promise<HydratedDocument<any> | null>;
     /** * Generic method to find a single document by a filter.
      *
      * This function retrieves a single document from the database that matches the provided filter.
@@ -64,7 +80,7 @@ export declare class GenericDatabase<T extends Model<HydratedDocument<any>>> {
      * @returns {Promise<HydratedDocument<any> | null>} - A Promise that resolves to the found document, or null if not found.
      * @throws {NotFoundException} - Thrown if an error occurs during the search.
      */
-    genericFindOne(filter: any): Promise<HydratedDocument<any> | null>;
+    genericFindOne(filter: any, options?: DbOptions): Promise<HydratedDocument<any> | null>;
     /**
      * Find a single document with optional population.
      *
@@ -97,3 +113,4 @@ export declare class GenericDatabase<T extends Model<HydratedDocument<any>>> {
      */
     genericFindOneOrNotFound(filter: any): Promise<HydratedDocument<any> | null>;
 }
+export {};
